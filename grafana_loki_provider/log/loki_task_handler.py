@@ -24,6 +24,8 @@ import os
 BasicAuth = Optional[Tuple[str, str]]
 
 DEFAULT_LOGGER_NAME = "airflow"
+CONFIG_LABEL_PREFIX = "remote_log_label_"
+ENVIRONMENT_VARIABLE_PREFIX = "env:"
 
 import json
 
@@ -68,8 +70,21 @@ class LokiTaskHandler(FileTaskHandler, LoggingMixin):
         )
 
     def get_labels(self, ti) -> Dict[str, str]:
+        labels = {}
 
-        return {"dag_id": ti.dag_id, "task_id": ti.task_id}
+        for option in conf.options("logging"):
+            if option.startswith(CONFIG_LABEL_PREFIX):
+                label = option.removeprefix(CONFIG_LABEL_PREFIX)
+                value = conf.get("logging", option)
+                if value.startswith(ENVIRONMENT_VARIABLE_PREFIX):
+                    environment_variable = value.removeprefix(ENVIRONMENT_VARIABLE_PREFIX)
+                    value = os.environ.get(environment_variable, value)
+                labels[label] = value
+                
+        labels["dag_id"] = ti.dag_id
+        labels["task_id"] = ti.task_id
+
+        return labels
 
     def set_context(self, task_instance: "TaskInstance") -> None:
 
